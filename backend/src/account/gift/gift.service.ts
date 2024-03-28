@@ -71,9 +71,13 @@ export class GiftService {
     const provider = new ethers.providers.JsonRpcProvider(
       process.env.NETWORK_RPC || MockGiftModel.network,
     );
-    const escrow = new ethers.Contract(gift.uuid, ESCROW_ABI, provider);
+    const escrow = new ethers.Contract(
+      process.env.PROXY_CONTRACT,
+      ESCROW_ABI,
+      provider,
+    );
 
-    const code = Number(await escrow.escrowStatus());
+    const code = Number(await escrow.escrowStatus(gift.uuid));
 
     return { state: stateCode[code] };
   }
@@ -199,12 +203,12 @@ export class GiftService {
         const signer = new ethers.Wallet(privateKey, provider);
 
         const escrowContract = new ethers.Contract(
-          gift.uuid,
+          process.env.PROXY_CONTRACT,
           ESCROW_ABI,
           signer,
         );
 
-        await escrowContract.confirmFulfillment();
+        await escrowContract.confirmFulfillment(gift.uuid);
 
         const currentBlock = await provider.getBlockNumber();
 
@@ -218,7 +222,11 @@ export class GiftService {
           toBlock,
         );
 
-        if (allEvents.length) {
+        const matchingEvents = allEvents.filter(
+          (event) => event.args.uuid === gift.uuid,
+        );
+
+        if (matchingEvents.length) {
           console.log(allEvents, '과거 이벤트 참조로 Fulfilled 상태 전환');
           await this.giftRepo.update(id, { state: State.FULFILLED });
           await this.notificationService.sendNotification(
@@ -264,9 +272,13 @@ export class GiftService {
     if (!privateKey) throw new Error('No private key.');
     const signer = new ethers.Wallet(privateKey, provider);
 
-    const escrowContract = new ethers.Contract(gift.uuid, ESCROW_ABI, signer);
+    const escrowContract = new ethers.Contract(
+      process.env.PROXY_CONTRACT,
+      ESCROW_ABI,
+      signer,
+    );
 
-    await escrowContract.confirmProductUsed();
+    await escrowContract.confirmProductUsed(gift.uuid);
 
     const currentBlock = await provider.getBlockNumber();
 
@@ -279,8 +291,12 @@ export class GiftService {
       fromBlock,
       toBlock,
     );
+    console.log(allEvents);
+    const matchingEvents = allEvents.filter(
+      (event) => event.args.uuid === gift.uuid,
+    );
 
-    if (allEvents.length) {
+    if (matchingEvents.length) {
       console.log(allEvents, '과거 이벤트 참조로 정산 함수 실행');
       await this.giftRepo.update(id, { state: State.EXECUTED });
     } else {
@@ -299,9 +315,13 @@ export class GiftService {
     const provider = new ethers.providers.JsonRpcProvider(
       process.env.NETWORK_RPC || MockGiftModel.network,
     );
-    const escrow = new ethers.Contract(gift.uuid, ESCROW_ABI, provider);
+    const escrow = new ethers.Contract(
+      process.env.PROXY_CONTRACT,
+      ESCROW_ABI,
+      provider,
+    );
 
-    const result = await escrow.contractState();
+    const result = await escrow.contractState(gift.uuid);
     console.log('Contract state: ', result);
     return result;
   }
